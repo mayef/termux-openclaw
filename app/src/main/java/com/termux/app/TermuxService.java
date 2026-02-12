@@ -979,7 +979,7 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
                 com.termux.shared.termux.TermuxConstants.TERMUX_HOME_DIR, ".openclaw_bootstrapped");
             bootstrapFlag.createNewFile();
 
-            String cmd = "bash " + file.getAbsolutePath() + " --update && source ~/.bashrc";
+            String cmd = "bash " + file.getAbsolutePath() + " --update --non-interactive && source ~/.bashrc";
             session.write(cmd + "\r\n");
         } catch (Exception ignored) {}
     }

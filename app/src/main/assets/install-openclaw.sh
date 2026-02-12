@@ -27,17 +27,18 @@ pkg install nodejs-lts git tmux openssh termux-api which -y
 echo "Running OpenClaw core installer..."
 #!/bin/bash
 # ==========================================
-# Openclaw Termux Deployment Script v2.0
+# Openclaw Termux Deployment Script v2.1
 # ==========================================
 #
 # Usage: curl -sL https://s.zhihai.me/openclaw > openclaw-install.sh && bash openclaw-install.sh [options]
 #
 # Options:
-#   --help, -h       Show help information
-#   --verbose, -v    Enable verbose output (shows command execution details)
-#   --dry-run, -d    Dry run mode (simulate execution without making changes)
-#   --uninstall, -u  Uninstall Openclaw and clean up configurations
-#   --update, -U     Force update Openclaw to latest version without prompting
+#   --help, -h              Show help information
+#   --verbose, -v           Enable verbose output (shows command execution details)
+#   --dry-run, -d           Dry run mode (simulate execution without making changes)
+#   --uninstall, -u         Uninstall Openclaw and clean up configurations
+#   --update, -U            Force update Openclaw to latest version without prompting
+#   --non-interactive, -y   Non-interactive mode (use all defaults, no prompts)
 #
 # Examples:
 #   curl -sL https://s.zhihai.me/openclaw > openclaw-install.sh && bash openclaw-install.sh
@@ -45,6 +46,7 @@ echo "Running OpenClaw core installer..."
 #   curl -sL https://s.zhihai.me/openclaw > openclaw-install.sh && bash openclaw-install.sh --dry-run
 #   curl -sL https://s.zhihai.me/openclaw > openclaw-install.sh && bash openclaw-install.sh --uninstall
 #   curl -sL https://s.zhihai.me/openclaw > openclaw-install.sh && bash openclaw-install.sh --update
+#   curl -sL https://s.zhihai.me/openclaw > openclaw-install.sh && bash openclaw-install.sh --update --non-interactive
 #
 # Note: For direct local execution, use: bash install-openclaw-termux.sh [options]
 #
@@ -58,6 +60,7 @@ VERBOSE=0
 DRY_RUN=0
 UNINSTALL=0
 FORCE_UPDATE=0
+NON_INTERACTIVE=0
 while [[ $# -gt 0 ]]; do
     case $1 in
         --verbose|-v)
@@ -76,14 +79,19 @@ while [[ $# -gt 0 ]]; do
             FORCE_UPDATE=1
             shift
             ;;
+        --non-interactive|-y)
+            NON_INTERACTIVE=1
+            shift
+            ;;
         --help|-h)
             echo "用法: $0 [选项]"
             echo "选项:"
-            echo "  --verbose, -v    启用详细输出"
-            echo "  --dry-run, -d    模拟运行，不执行实际命令"
-            echo "  --uninstall, -u  卸载 Openclaw 和相关配置"
-            echo "  --update, -U     强制更新到最新版本"
-            echo "  --help, -h       显示此帮助信息"
+            echo "  --verbose, -v           启用详细输出"
+            echo "  --dry-run, -d           模拟运行，不执行实际命令"
+            echo "  --uninstall, -u         卸载 Openclaw 和相关配置"
+            echo "  --update, -U            强制更新到最新版本"
+            echo "  --non-interactive, -y   非交互模式，使用所有默认值"
+            echo "  --help, -h              显示此帮助信息"
             exit 0
             ;;
         *)
@@ -97,7 +105,7 @@ done
 trap 'echo -e "${RED}错误：脚本执行失败，请检查上述输出${NC}"; exit 1' ERR
 
 # ==========================================
-# Openclaw Termux Deployment Script v2.0
+# Openclaw Termux Deployment Script v2.1
 # ==========================================
 
 # Function definitions
@@ -194,7 +202,8 @@ configure_npm() {
         echo -e "${RED}错误：NPM 前缀设置失败${NC}"
         exit 1
     fi
-    grep -qxF "export PATH=$NPM_BIN:$PATH" "$BASHRC" || echo "export PATH=$NPM_BIN:$PATH" >> "$BASHRC"
+    # 修复：直接用硬编码路径，确保即时生效
+    grep -qxF "export PATH=$NPM_BIN:\$PATH" "$BASHRC" || echo "export PATH=$NPM_BIN:\$PATH" >> "$BASHRC"
     export PATH="$NPM_BIN:$PATH"
 
     # 在安装前创建必要的目录（Termux 兼容性处理）
@@ -216,7 +225,7 @@ configure_npm() {
         log "Openclaw 已安装，检查版本"
         echo -e "${BLUE}检查 Openclaw 版本...${NC}"
         INSTALLED_VERSION=$(npm list -g openclaw --depth=0 2>/dev/null | grep -oE 'openclaw@[0-9]+\.[0-9]+\.[0-9]+' | cut -d@ -f2)
-        if [ -z "$INSTALLED_VERSION" ]; then
+        if [ -z "INSTALLED_VERSION" ]; then
             log "版本提取失败，尝试备用方法"
             INSTALLED_VERSION=$(npm view openclaw version 2>/dev/null || echo "unknown")
         fi
@@ -250,8 +259,13 @@ configure_npm() {
                     log "Openclaw 更新完成"
                     echo -e "${GREEN}✅ Openclaw 已更新到 $LATEST_VERSION${NC}"
                 else
-                    read -p "是否更新到新版本? (y/n) [默认: y]: " UPDATE_CHOICE
-                    UPDATE_CHOICE=${UPDATE_CHOICE:-y}
+                    if [ $NON_INTERACTIVE -eq 1 ]; then
+                        log "非交互模式，自动更新"
+                        UPDATE_CHOICE="y"
+                    else
+                        read -p "是否更新到新版本? (y/n) [默认: y]: " UPDATE_CHOICE
+                        UPDATE_CHOICE=${UPDATE_CHOICE:-y}
+                    fi
 
                     if [ "$UPDATE_CHOICE" = "y" ] || [ "$UPDATE_CHOICE" = "Y" ]; then
                         log "开始更新 Openclaw"
@@ -351,42 +365,58 @@ apply_patches() {
     fi
 }
 
-setup_autostart() {
+setup_bashrc() {
     # Configure autostart and aliases
-    if [ "$AUTO_START" == "y" ]; then
-        log "配置自启动"
-        # 备份原 ~/.bashrc 文件
-        run_cmd cp "$BASHRC" "$BASHRC.backup"
-        run_cmd sed -i '/# --- Openclaw Start ---/,/# --- Openclaw End ---/d' "$BASHRC"
-        if [ $? -ne 0 ]; then
-            log "bashrc 修改失败"
-            echo -e "${RED}错误：bashrc 修改失败${NC}"
-            exit 1
-        fi
-        cat << EOT >> "$BASHRC"
-# --- Openclaw Start ---
+    log "配置 bashrc 环境和别名"
+    # 备份原 ~/.bashrc 文件
+    run_cmd cp "$BASHRC" "$BASHRC.backup"
+    
+    # 修复：统一大小写匹配，确保能清理旧块
+    run_cmd sed -i '/# --- [Oo]pen[Cc]law [Ss]tart ---/,/# --- [Oo]pen[Cc]law [Ee]nd ---/d' "$BASHRC"
+    if [ $? -ne 0 ]; then
+        log "bashrc 修改失败"
+        echo -e "${RED}错误：bashrc 修改失败${NC}"
+        exit 1
+    fi
+
+    # 1. 始终写入基础别名和环境配置 (不依赖 AUTO_START)
+    # 修复：$NPM_BIN 应该在 heredoc 写入时展开，而不是写入字面量
+    # 修复：统一使用 OpenClaw (C大写)
+    cat << EOT >> "$BASHRC"
+# --- OpenClaw Start ---
 # WARNING: This section contains your access token - keep ~/.bashrc secure
 export TERMUX_VERSION=1
 export TMPDIR=\$HOME/tmp
 export OPENCLAW_GATEWAY_TOKEN=$TOKEN
-export PATH=\$NPM_BIN:\$PATH
+export PATH=$NPM_BIN:\$PATH
 sshd 2>/dev/null
 termux-wake-lock 2>/dev/null
-alias ocr="pkill -9 -f 'openclaw' 2>/dev/null; tmux kill-session -t openclaw 2>/dev/null; sleep 1; tmux new -d -s openclaw; sleep 1; tmux send-keys -t openclaw \"export PATH=$NPM_BIN:\$PATH TMPDIR=\$HOME/tmp; export OPENCLAW_GATEWAY_TOKEN=$TOKEN; openclaw gateway --bind lan --port $PORT --token \\\$OPENCLAW_GATEWAY_TOKEN --allow-unconfigured\" C-m"
+alias ocr="pkill -9 -f 'openclaw' 2>/dev/null; tmux kill-session -t openclaw 2>/dev/null; sleep 1; tmux new -d -s openclaw; sleep 1; tmux send-keys -t openclaw \"export PATH=$NPM_BIN:\\\$PATH TMPDIR=\$HOME/tmp; export OPENCLAW_GATEWAY_TOKEN=$TOKEN; openclaw gateway --bind lan --port $PORT --token \\\\\\\$OPENCLAW_GATEWAY_TOKEN --allow-unconfigured\" C-m"
 alias oclog='tmux attach -t openclaw'
 alias ockill='pkill -9 -f "openclaw" 2>/dev/null; tmux kill-session -t openclaw 2>/dev/null'
-# --- OpenClaw End ---
 EOT
 
-        source "$BASHRC"
-        if [ $? -ne 0 ]; then
-            log "bashrc 加载警告"
-            echo -e "${YELLOW}警告：bashrc 加载失败，可能影响别名${NC}"
-        fi
-        log "自启动配置完成"
+    # 2. 如果开启自启动，追加加载逻辑
+    if [ "$AUTO_START" == "y" ]; then
+        log "开启自启动配置"
+        cat << EOT >> "$BASHRC"
+# Auto-start logic
+if ! pgrep -f "openclaw gateway" >/dev/null 2>&1; then
+    ocr >/dev/null 2>&1
+fi
+EOT
     else
         log "跳过自启动配置"
     fi
+
+    echo "# --- OpenClaw End ---" >> "$BASHRC"
+
+    source "$BASHRC"
+    if [ $? -ne 0 ]; then
+        log "bashrc 加载警告"
+        echo -e "${YELLOW}警告：bashrc 加载失败，可能影响别名${NC}"
+    fi
+    log "bashrc 配置完成"
 }
 
 activate_wakelock() {
@@ -415,8 +445,14 @@ start_service() {
         log "发现已有 Openclaw 实例在运行"
         echo -e "${YELLOW}⚠️  检测到 Openclaw 实例已在运行${NC}"
         echo -e "${BLUE}运行中的进程: $RUNNING_PROCESS${NC}"
-        read -p "是否停止旧实例并启动新实例? (y/n) [默认: y]: " RESTART_CHOICE
-        RESTART_CHOICE=${RESTART_CHOICE:-y}
+
+        RESTART_CHOICE="y"
+        if [ $NON_INTERACTIVE -eq 0 ]; then
+            read -p "是否停止旧实例并启动新实例? (y/n) [默认: y]: " RESTART_CHOICE
+            RESTART_CHOICE=${RESTART_CHOICE:-y}
+        else 
+            log "非交互模式，自动重启实例"
+        fi
 
         if [ "$RESTART_CHOICE" = "y" ] || [ "$RESTART_CHOICE" = "Y" ]; then
             log "停止旧实例"
@@ -471,7 +507,8 @@ uninstall_openclaw() {
 
     # 删除别名和配置
     echo -e "${YELLOW}删除别名和配置...${NC}"
-    run_cmd sed -i '/# --- Openclaw Start ---/,/# --- Openclaw End ---/d' "$BASHRC"
+    # 修复：统一匹配两种大小写
+    run_cmd sed -i '/# --- [Oo]pen[Cc]law [Ss]tart ---/,/# --- [Oo]pen[Cc]law [Ee]nd ---/d' "$BASHRC"
     run_cmd sed -i '/export PATH=.*\.npm-global\/bin/d' "$BASHRC"
     log "别名和配置已删除"
 
@@ -507,6 +544,7 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
+CYAN='\033[0;36m'
 NC='\033[0m'
 
 # 检查终端是否支持颜色
@@ -517,6 +555,7 @@ else
     BLUE=''
     YELLOW=''
     RED=''
+    CYAN=''
     NC=''
 fi
 
@@ -557,35 +596,44 @@ if [ $VERBOSE -eq 1 ]; then
     echo -e "${BLUE}详细输出模式已启用${NC}"
 fi
 echo -e "${BLUE}=========================================="
-echo -e "   🦞 Openclaw Termux 部署工具"
+echo -e "   🦞 Openclaw Termux 部署工具 v2.1"
 echo -e "==========================================${NC}"
 
 # --- 交互配置 ---
-read -p "请输入 Gateway 端口号 [默认: 18789]: " INPUT_PORT
-if [ -z "$INPUT_PORT" ]; then
-    echo -e "${GREEN}✓ 使用默认端口: 18789${NC}"
+if [ $NON_INTERACTIVE -eq 1 ]; then
+    # 非交互模式：使用所有默认值
     PORT=18789
-else
-    # 验证输入的端口号是否为数字
-    if ! [[ "$INPUT_PORT" =~ ^[0-9]+$ ]]; then
-        echo -e "${RED}错误：端口号必须是数字，使用默认值 18789${NC}"
-        PORT=18789
-    else
-        PORT=$INPUT_PORT
-        echo -e "${GREEN}✓ 使用端口: $PORT${NC}"
-    fi
-fi
-
-read -p "请输入自定义 Token (用于安全访问，建议强密码) [留空随机生成]: " TOKEN
-if [ -z "$TOKEN" ]; then
-    # 生成随机 Token
     RANDOM_PART=$(date +%s | md5sum | cut -c 1-8)
     TOKEN="token$RANDOM_PART"
-    echo -e "${GREEN}生成的随机 Token: $TOKEN${NC}"
-fi
+    AUTO_START="n"
+    echo -e "${GREEN}✓ 非交互模式：端口=$PORT, Token=$TOKEN, 自启动=$AUTO_START${NC}"
+else
+    read -p "请输入 Gateway 端口号 [默认: 18789]: " INPUT_PORT
+    if [ -z "$INPUT_PORT" ]; then
+        echo -e "${GREEN}✓ 使用默认端口: 18789${NC}"
+        PORT=18789
+    else
+        # 验证输入的端口号是否为数字
+        if ! [[ "$INPUT_PORT" =~ ^[0-9]+$ ]]; then
+            echo -e "${RED}错误：端口号必须是数字，使用默认值 18789${NC}"
+            PORT=18789
+        else
+            PORT=$INPUT_PORT
+            echo -e "${GREEN}✓ 使用端口: $PORT${NC}"
+        fi
+    fi
 
-read -p "是否需要开启开机自启动? (y/n) [默认: y]: " AUTO_START
-AUTO_START=${AUTO_START:-y}
+    read -p "请输入自定义 Token (用于安全访问，建议强密码) [留空随机生成]: " TOKEN
+    if [ -z "$TOKEN" ]; then
+        # 生成随机 Token
+        RANDOM_PART=$(date +%s | md5sum | cut -c 1-8)
+        TOKEN="token$RANDOM_PART"
+        echo -e "${GREEN}生成的随机 Token: $TOKEN${NC}"
+    fi
+
+    read -p "是否需要开启开机自启动? (y/n) [默认: y]: " AUTO_START
+    AUTO_START=${AUTO_START:-y}
+fi
 
 # 执行步骤
 if [ $UNINSTALL -eq 1 ]; then
@@ -593,13 +641,12 @@ if [ $UNINSTALL -eq 1 ]; then
     exit 0
 fi
 
-log "脚本开始执行，用户配置: 端口=$PORT, Token=$TOKEN, 自启动=$AUTO_START"
+log "脚本开始执行，用户配置: 端口=$PORT, Token=$TOKEN, 自启动=$AUTO_START, 非交互=$NON_INTERACTIVE"
 check_deps
 configure_npm
 apply_patches
-setup_autostart
+setup_bashrc
 activate_wakelock
 start_service
 echo -e "${GREEN}脚本执行完成！${NC}，token为：$TOKEN  。常用命令：执行 oclog 查看运行状态； ockill 停止服务；ocr 重启服务。"
 log "脚本执行完成"
-
