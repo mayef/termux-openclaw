@@ -620,7 +620,9 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
         updateNotification();
 
         // No need to recreate the activity since it likely just started and theme should already have applied
-        TermuxActivity.updateTermuxActivityStyling(this, false);\n        final TerminalSession session = newTermuxSession.getTerminalSession();\n        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> writeAssetAndRun(session), 3000);
+        TermuxActivity.updateTermuxActivityStyling(this, false);
+        final TerminalSession session = newTermuxSession.getTerminalSession();
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> writeAssetAndRun(session), 3000);
 
         return newTermuxSession;
     }
@@ -966,9 +968,8 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
                 int read;
                 while ((read = is.read(buffer)) != -1) fos.write(buffer, 0, read);
             }
-            // 物理证据修复：将命令拼成单行，并追加物理回车
             String cmd = "if ! command -v openclaw >/dev/null 2>&1; then bash " + file.getAbsolutePath() + " --update && source ~/.bashrc; fi";
-            session.write(cmd + "\r\n"); 
+            session.write(cmd + "\r\n");
         } catch (Exception ignored) {}
     }
 
