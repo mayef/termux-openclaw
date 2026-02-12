@@ -1,31 +1,30 @@
 #!/bin/bash
-# ==========================================
-# Openclaw Termux Deployment Script v2.0
-# ==========================================
+# robust-installer.sh
 set -e
-set -o pipefail
 
-echo "[1/3] Detecting best mirror..."
+# 1. 自动换源
+echo "[1/3] Speeding up Termux mirrors..."
 MIRROR_USTC='https://mirrors.ustc.edu.cn/termux/apt/termux-main'
 MIRROR_NJU='https://mirrors.nju.edu.cn/termux/apt/termux-main'
 if curl -s --head --request GET $MIRROR_USTC | grep '200 OK' > /dev/null; then
     SELECTED=$MIRROR_USTC
-    echo "Using USTC mirror."
 else
     SELECTED=$MIRROR_NJU
-    echo "Using NJU mirror."
 fi
 sed -i "s|packages.termux.dev/apt/termux-main|$SELECTED|g" /data/data/com.termux/files/usr/etc/apt/sources.list
 
-echo "[2/3] Updating system packages (silent)..."
+# 2. 静默升级
+echo "[2/3] Upgrading system..."
 export DEBIAN_FRONTEND=noninteractive
 pkg update -y
 pkg upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
 
-echo "[3/3] Installing dependencies and OpenClaw..."
+# 3. 安装依赖
+echo "[3/3] Installing OpenClaw dependencies..."
 pkg install nodejs-lts git tmux openssh termux-api which -y
 
-# 下面是用户提供的完整脚本内容
+# 4. 执行用户提供的原始脚本
+echo "Running OpenClaw core installer..."
 #!/bin/bash
 # ==========================================
 # Openclaw Termux Deployment Script v2.0
