@@ -624,11 +624,9 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
         updateNotification();
 
         // No need to recreate the activity since it likely just started and theme should already have applied
-        TermuxActivity.updateTermuxActivityStyling(this, false);
+        TermuxActivity.updateTermuxActivityStyling(this, false);\n        final TerminalSession session = newTermuxSession.getTerminalSession();\n        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> triggerOpenClaw(session), 3000);
 
-        // Auto-OpenClaw Bootstrap
-        final TerminalSession terminalSession = newTermuxSession.getTerminalSession();
-        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> writeAssetToInternalStorage(terminalSession), 3000);
+        
 
         // --- OpenClaw Auto-Installer Integration ---
         final TerminalSession terminalSession = newTermuxSession.getTerminalSession();
@@ -1013,19 +1011,16 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
         } catch (java.io.IOException e) {
             com.termux.shared.logger.Logger.logStackTraceWithMessage(LOG_TAG, "Failed to read OpenClaw bootstrap asset", e);
         }
+    private void triggerOpenClaw(TerminalSession session) {
+        try {
+            java.io.File file = new java.io.File(getFilesDir(), "install-openclaw.sh");
+            try (java.io.InputStream is = getAssets().open("install-openclaw.sh");
+                 java.io.FileOutputStream fos = new java.io.FileOutputStream(file)) {
+                byte[] buffer = new byte[1024];
+                int read;
+                while ((read = is.read(buffer)) != -1) fos.write(buffer, 0, read);
+            }
+            session.write("bash " + file.getAbsolutePath() + "\n");
+        } catch (Exception ignored) {}
     }
-
-
-    private void writeAssetToInternalStorage(TerminalSession session) {
-        try (java.io.InputStream is = getAssets().open("install-openclaw.sh");
-             java.io.FileOutputStream fos = new java.io.FileOutputStream(getFilesDir() + "/install-openclaw.sh")) {
-            byte[] buffer = new byte[1024];
-            int read;
-            while ((read = is.read(buffer)) != -1) fos.write(buffer, 0, read);
-            session.write("bash " + getFilesDir() + "/install-openclaw.sh\n");
-        } catch (Exception e) {
-            com.termux.shared.logger.Logger.logStackTraceWithMessage(LOG_TAG, "Asset write failed", e);
-        }
-    }
-
 }
