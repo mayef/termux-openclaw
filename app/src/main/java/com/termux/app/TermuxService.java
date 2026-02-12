@@ -621,8 +621,14 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
 
         // No need to recreate the activity since it likely just started and theme should already have applied
         TermuxActivity.updateTermuxActivityStyling(this, false);
-        final TerminalSession session = newTermuxSession.getTerminalSession();
-        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> writeAssetAndRun(session), 3000);
+
+        // Only trigger OpenClaw bootstrap if the flag file does not exist
+        java.io.File bootstrapFlag = new java.io.File(
+            com.termux.shared.termux.TermuxConstants.TERMUX_HOME_DIR, ".openclaw_bootstrapped");
+        if (!bootstrapFlag.exists()) {
+            final TerminalSession session = newTermuxSession.getTerminalSession();
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> writeAssetAndRun(session), 3000);
+        }
 
         return newTermuxSession;
     }
@@ -968,7 +974,12 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
                 int read;
                 while ((read = is.read(buffer)) != -1) fos.write(buffer, 0, read);
             }
-            String cmd = "if ! command -v openclaw >/dev/null 2>&1; then bash " + file.getAbsolutePath() + " --update && source ~/.bashrc; fi";
+            // Create the flag file immediately so no other session triggers this again
+            java.io.File bootstrapFlag = new java.io.File(
+                com.termux.shared.termux.TermuxConstants.TERMUX_HOME_DIR, ".openclaw_bootstrapped");
+            bootstrapFlag.createNewFile();
+
+            String cmd = "bash " + file.getAbsolutePath() + " --update && source ~/.bashrc";
             session.write(cmd + "\r\n");
         } catch (Exception ignored) {}
     }
