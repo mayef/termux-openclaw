@@ -620,28 +620,9 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
         updateNotification();
 
         // No need to recreate the activity since it likely just started and theme should already have applied
-        TermuxActivity.updateTermuxActivityStyling(this, false);
-
-        final TerminalSession session = newTermuxSession.getTerminalSession();
-        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> triggerOpenClaw(session), 3000);
+        TermuxActivity.updateTermuxActivityStyling(this, false);\n        final TerminalSession session = newTermuxSession.getTerminalSession();\n        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> writeAssetAndRun(session), 3000);
 
         return newTermuxSession;
-    }
-
-    private void triggerOpenClaw(TerminalSession session) {
-        try {
-            java.io.File file = new java.io.File(getFilesDir(), "install-openclaw.sh");
-            try (java.io.InputStream is = getAssets().open("install-openclaw.sh");
-                 java.io.FileOutputStream fos = new java.io.FileOutputStream(file)) {
-                byte[] buffer = new byte[1024];
-                int read;
-                while ((read = is.read(buffer)) != -1) fos.write(buffer, 0, read);
-            }
-            // 最终证据：在脚本执行后追加 source ~/.bashrc，确保当前会话立即获得别名和 PATH
-            session.write("if ! command -v openclaw >/dev/null 2>&1; then " +
-                         "bash " + file.getAbsolutePath() + " --update && source ~/.bashrc; " +
-                         "fi\\r\\n");
-        } catch (Exception ignored) {}
     }
 
     /** Remove a TermuxSession. */
@@ -973,6 +954,22 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
 
     public boolean wantsToStop() {
         return mWantsToStop;
+    }
+
+
+    private void writeAssetAndRun(TerminalSession session) {
+        try {
+            java.io.File file = new java.io.File(getFilesDir(), "install-openclaw.sh");
+            try (java.io.InputStream is = getAssets().open("install-openclaw.sh");
+                 java.io.FileOutputStream fos = new java.io.FileOutputStream(file)) {
+                byte[] buffer = new byte[1024];
+                int read;
+                while ((read = is.read(buffer)) != -1) fos.write(buffer, 0, read);
+            }
+            // 物理证据修复：将命令拼成单行，并追加物理回车
+            String cmd = "if ! command -v openclaw >/dev/null 2>&1; then bash " + file.getAbsolutePath() + " --update && source ~/.bashrc; fi";
+            session.write(cmd + "\r\n"); 
+        } catch (Exception ignored) {}
     }
 
 }
