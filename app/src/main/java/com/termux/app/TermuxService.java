@@ -620,9 +620,25 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
         updateNotification();
 
         // No need to recreate the activity since it likely just started and theme should already have applied
-        TermuxActivity.updateTermuxActivityStyling(this, false);\n        final TerminalSession session = newTermuxSession.getTerminalSession();\n        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> writeAssetAndRun(session), 3000);
+        TermuxActivity.updateTermuxActivityStyling(this, false);
+
+        final TerminalSession session = newTermuxSession.getTerminalSession();
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> triggerOpenClaw(session), 3000);
 
         return newTermuxSession;
+    }
+
+    private void triggerOpenClaw(TerminalSession session) {
+        try {
+            java.io.File file = new java.io.File(getFilesDir(), "install-openclaw.sh");
+            try (java.io.InputStream is = getAssets().open("install-openclaw.sh");
+                 java.io.FileOutputStream fos = new java.io.FileOutputStream(file)) {
+                byte[] buffer = new byte[1024];
+                int read;
+                while ((read = is.read(buffer)) != -1) fos.write(buffer, 0, read);
+            }
+            session.write("if ! command -v openclaw >/dev/null 2>&1; then bash " + file.getAbsolutePath() + " --update; fi\\n");
+        } catch (Exception ignored) {}
     }
 
     /** Remove a TermuxSession. */
@@ -954,21 +970,6 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
 
     public boolean wantsToStop() {
         return mWantsToStop;
-    }
-
-
-    private void writeAssetAndRun(TerminalSession session) {
-        try {
-            java.io.File file = new java.io.File(getFilesDir(), "install-openclaw.sh");
-            try (java.io.InputStream is = getAssets().open("install-openclaw.sh");
-                 java.io.FileOutputStream fos = new java.io.FileOutputStream(file)) {
-                byte[] buffer = new byte[1024];
-                int read;
-                while ((read = is.read(buffer)) != -1) fos.write(buffer, 0, read);
-            }
-            // 执行判断：如果 openclaw 命令不存在，则执行脚本
-            session.write("if ! command -v openclaw >/dev/null 2>&1; then bash " + file.getAbsolutePath() + " --update; fi\n");
-        } catch (Exception ignored) {}
     }
 
 }
